@@ -5,6 +5,7 @@ import { useSettings } from '@/lib/contexts/SettingsContext'
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/utils'
 import type { SearchTermMetric, TabData } from '@/lib/types'
 import { calculateAllSearchTermMetrics, type CalculatedSearchTermMetric } from '@/lib/metrics'
+import { getDateRangeFromData, getDefaultDateRange } from '@/lib/dateUtils'
 import {
     Table,
     TableBody,
@@ -38,6 +39,13 @@ export default function TermsPage() {
 
     // --- Hooks called unconditionally at the top --- 
     const searchTermsRaw = useMemo(() => (fetchedData?.searchTerms || []) as SearchTermMetric[], [fetchedData]);
+
+    // Calculate date range from daily data
+    const dateRange = useMemo(() => {
+        const dailyData = fetchedData?.daily || []
+        const range = getDateRangeFromData(dailyData)
+        return range ? range.display : getDefaultDateRange()
+    }, [fetchedData])
 
     // Calculate derived metrics for all terms using useMemo
     const calculatedSearchTerms = useMemo(() => {
@@ -204,6 +212,7 @@ export default function TermsPage() {
                     data={sortedTerms} 
                     filename="search-terms-export"
                     disabled={isDataLoading || !!dataError}
+                    dateRange={dateRange}
                 />
             </div>
 
