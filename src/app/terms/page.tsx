@@ -14,6 +14,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { Button } from '@/components/ui/button'
+import { DownloadButton } from '@/components/DownloadButton'
 
 type SortField = keyof CalculatedSearchTermMetric
 type SortDirection = 'asc' | 'desc'
@@ -87,7 +88,14 @@ export default function TermsPage() {
 
     return (
         <div className="container mx-auto px-4 py-12 mt-16">
-            <h1 className="text-3xl font-bold mb-12 text-gray-900">Search Terms</h1>
+            <div className="flex justify-between items-center mb-8">
+                <h1 className="text-3xl font-bold text-gray-900">Search Terms</h1>
+                <DownloadButton 
+                    data={sortedTerms} 
+                    filename="search-terms-export"
+                    disabled={isDataLoading || !!dataError}
+                />
+            </div>
 
             <div className="rounded-md border">
                 <Table>
