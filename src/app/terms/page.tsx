@@ -52,6 +52,44 @@ export default function TermsPage() {
         return calculateAllSearchTermMetrics(searchTermsRaw)
     }, [searchTermsRaw])
 
+    // Calculate totals across all search terms
+    const totalsRow = useMemo(() => {
+        if (!calculatedSearchTerms.length) return null
+
+        const totals = calculatedSearchTerms.reduce((acc, term) => ({
+            impr: acc.impr + term.impr,
+            clicks: acc.clicks + term.clicks,
+            cost: acc.cost + term.cost,
+            conv: acc.conv + term.conv,
+            value: acc.value + term.value,
+        }), {
+            impr: 0,
+            clicks: 0,
+            cost: 0,
+            conv: 0,
+            value: 0,
+        })
+
+        // Calculate derived metrics for totals
+        const CTR = totals.impr > 0 ? (totals.clicks / totals.impr) * 100 : 0
+        const CPC = totals.clicks > 0 ? totals.cost / totals.clicks : 0
+        const CvR = totals.clicks > 0 ? (totals.conv / totals.clicks) * 100 : 0
+        const CPA = totals.conv > 0 ? totals.cost / totals.conv : 0
+        const ROAS = totals.cost > 0 ? totals.value / totals.cost : 0
+
+        return {
+            search_term: 'Total',
+            campaign: '',
+            ad_group: '',
+            ...totals,
+            CTR,
+            CPC,
+            CvR,
+            CPA,
+            ROAS,
+        } as CalculatedSearchTermMetric
+    }, [calculatedSearchTerms])
+
     // Sort data (now using calculated terms)
     const sortedTerms = useMemo(() => {
         return [...calculatedSearchTerms].sort((a, b) => {
@@ -262,6 +300,28 @@ export default function TermsPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
+                        {/* Totals Row */}
+                        {totalsRow && (
+                            <TableRow className="bg-gray-50 border-b-2 border-gray-200 font-semibold">
+                                <TableCell className="font-bold text-gray-900">{totalsRow.search_term}</TableCell>
+                                <TableCell className="text-gray-600">All Campaigns</TableCell>
+                                <TableCell className="text-gray-600">All Ad Groups</TableCell>
+                                <TableCell className="text-right">{formatNumber(totalsRow.impr)}</TableCell>
+                                <TableCell className="text-right">{formatNumber(totalsRow.clicks)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(totalsRow.cost, settings.currency)}</TableCell>
+                                <TableCell className="text-right">{formatNumber(totalsRow.conv)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(totalsRow.value, settings.currency)}</TableCell>
+                                <TableCell className="text-right">{formatPercent(totalsRow.CTR)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(totalsRow.CPC, settings.currency)}</TableCell>
+                                <TableCell className="text-right">{formatPercent(totalsRow.CvR)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(totalsRow.CPA, settings.currency)}</TableCell>
+                                <TableCell className="text-right">
+                                    {(totalsRow.ROAS && isFinite(totalsRow.ROAS)) ? `${totalsRow.ROAS.toFixed(2)}x` : '-'}
+                                </TableCell>
+                            </TableRow>
+                        )}
+                        
+                        {/* Regular Data Rows */}
                         {currentPageData.map((term, i) => (
                             <TableRow key={`${term.search_term}-${term.campaign}-${term.ad_group}-${startIndex + i}`}>
                                 <TableCell className="font-medium">{term.search_term}</TableCell>
