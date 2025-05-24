@@ -1,7 +1,26 @@
 import type { CalculatedSearchTermMetric } from './metrics'
 
+export type MatchType = 'broad' | 'phrase' | 'exact'
+
+// Function to format search term based on match type
+function formatSearchTermByMatchType(searchTerm: string, matchType: MatchType): string {
+  switch (matchType) {
+    case 'phrase':
+      return `"${searchTerm}"`
+    case 'exact':
+      return `[${searchTerm}]`
+    case 'broad':
+    default:
+      return searchTerm
+  }
+}
+
 // Function to convert search terms data to CSV format
-export function exportSearchTermsToCSV(data: CalculatedSearchTermMetric[], filename: string = 'search-terms-export.csv'): void {
+export function exportSearchTermsToCSV(
+  data: CalculatedSearchTermMetric[], 
+  filename: string = 'search-terms-export.csv',
+  matchType: MatchType = 'broad'
+): void {
   if (!data || data.length === 0) {
     console.warn('No data to export')
     return
@@ -24,9 +43,9 @@ export function exportSearchTermsToCSV(data: CalculatedSearchTermMetric[], filen
     'ROAS'
   ]
 
-  // Convert data to CSV rows
+  // Convert data to CSV rows with match type formatting
   const csvRows = data.map(term => [
-    term.search_term,
+    formatSearchTermByMatchType(term.search_term, matchType),
     term.campaign,
     term.ad_group,
     term.impr,
@@ -73,7 +92,7 @@ export function exportSearchTermsToCSV(data: CalculatedSearchTermMetric[], filen
 }
 
 // Function to prepare data for Google Sheets import
-export function prepareForGoogleSheets(data: CalculatedSearchTermMetric[]): string {
+export function prepareForGoogleSheets(data: CalculatedSearchTermMetric[], matchType: MatchType = 'broad'): string {
   if (!data || data.length === 0) {
     return ''
   }
@@ -97,7 +116,7 @@ export function prepareForGoogleSheets(data: CalculatedSearchTermMetric[]): stri
 
   // Convert data to tab-separated values (TSV) for better Google Sheets compatibility
   const tsvRows = data.map(term => [
-    term.search_term,
+    formatSearchTermByMatchType(term.search_term, matchType),
     term.campaign,
     term.ad_group,
     term.impr,
@@ -118,9 +137,9 @@ export function prepareForGoogleSheets(data: CalculatedSearchTermMetric[]): stri
 }
 
 // Function to copy data to clipboard for Google Sheets paste
-export async function copyToClipboardForGoogleSheets(data: CalculatedSearchTermMetric[]): Promise<boolean> {
+export async function copyToClipboardForGoogleSheets(data: CalculatedSearchTermMetric[], matchType: MatchType = 'broad'): Promise<boolean> {
   try {
-    const tsvContent = prepareForGoogleSheets(data)
+    const tsvContent = prepareForGoogleSheets(data, matchType)
     await navigator.clipboard.writeText(tsvContent)
     return true
   } catch (error) {
@@ -133,4 +152,30 @@ export async function copyToClipboardForGoogleSheets(data: CalculatedSearchTermM
 export function createGoogleSheetsUrl(data: CalculatedSearchTermMetric[]): string {
   const baseUrl = 'https://docs.google.com/spreadsheets/create'
   return baseUrl
+}
+
+// Helper function to get match type label for filenames
+export function getMatchTypeLabel(matchType: MatchType): string {
+  switch (matchType) {
+    case 'phrase':
+      return 'phrase-match'
+    case 'exact':
+      return 'exact-match'
+    case 'broad':
+    default:
+      return 'broad-match'
+  }
+}
+
+// Helper function to get match type display name
+export function getMatchTypeDisplayName(matchType: MatchType): string {
+  switch (matchType) {
+    case 'phrase':
+      return 'Phrase Match'
+    case 'exact':
+      return 'Exact Match'
+    case 'broad':
+    default:
+      return 'Broad Match'
+  }
 } 

@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 
 export function DashboardPage() {
     const { settings } = useSettings()
-    const activeTab = settings.activeTab || 'daily'
+    const activeTab: SheetTab = settings.activeTab || 'daily'
     const metricOptions = getMetricOptions(activeTab)
     const [selectedMetrics, setSelectedMetrics] = useState<AllMetricKeys[]>(['cost', 'value'])
     const [chartType, setChartType] = useState<'line' | 'bar'>('line')
@@ -105,15 +105,15 @@ export function DashboardPage() {
                     data={dailyMetrics}
                     metric1={{
                         key: selectedMetrics[0],
-                        label: metricOptions[selectedMetrics[0]].label,
+                        label: metricOptions[selectedMetrics[0]]?.label || selectedMetrics[0],
                         color: '#1e40af',
-                        format: (v: number) => metricOptions[selectedMetrics[0]].format(v)
+                        format: (v: number) => metricOptions[selectedMetrics[0]]?.format(v) || v.toString()
                     }}
                     metric2={{
                         key: selectedMetrics[1],
-                        label: metricOptions[selectedMetrics[1]].label,
+                        label: metricOptions[selectedMetrics[1]]?.label || selectedMetrics[1],
                         color: '#ea580c',
-                        format: (v: number) => metricOptions[selectedMetrics[1]].format(v)
+                        format: (v: number) => metricOptions[selectedMetrics[1]]?.format(v) || v.toString()
                     }}
                     chartType={chartType}
                 />

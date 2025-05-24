@@ -1,7 +1,6 @@
 // src/lib/contexts/SettingsContext.tsx
 'use client'
 import { createContext, useContext, useState, useEffect, useMemo } from 'react'
-import useSWR, { mutate } from 'swr'
 import type { Campaign, Settings, TabData } from '../types'
 import { DEFAULT_SHEET_URL } from '../config'
 import { fetchAllTabsData, getCampaigns } from '../sheetsData'
@@ -23,78 +22,80 @@ const defaultSettings: Settings = {
   sheetUrl: DEFAULT_SHEET_URL,
   currency: '$',
   selectedCampaign: undefined,
-  activeTab: 'daily'
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined)
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings>(defaultSettings)
+  const [fetchedData, setFetchedData] = useState<TabData | undefined>(undefined)
+  const [isDataLoading, setIsDataLoading] = useState(true)
+  const [dataError, setDataError] = useState<any>(null)
 
-  // Load settings from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('settings')
-    if (saved) {
-      try {
-        const parsedSettings = JSON.parse(saved)
-        delete parsedSettings.campaigns // Ensure campaigns are not loaded
-        setSettings({ ...defaultSettings, ...parsedSettings })
-      } catch {
-        setSettings(defaultSettings)
-      }
+  // Function to fetch data
+  const fetchData = async (url: string) => {
+    try {
+      setIsDataLoading(true)
+      setDataError(null)
+      console.log('Fetching data from:', url)
+      
+      const data = await fetchAllTabsData(url)
+      console.log('Successfully fetched data:', data)
+      
+      setFetchedData(data)
+      setIsDataLoading(false)
+    } catch (error) {
+      console.error('Error fetching data:', error)
+      setDataError(error)
+      setIsDataLoading(false)
     }
-  }, [])
+  }
 
-  // Save settings to localStorage
+  // Fetch data when sheet URL changes
   useEffect(() => {
-    const { campaigns, ...settingsToSave } = settings as any // Exclude campaigns if present
-    localStorage.setItem('settings', JSON.stringify(settingsToSave))
-  }, [settings])
+    fetchData(settings.sheetUrl)
+  }, [settings.sheetUrl])
 
-  // Fetch data using useSWR based on sheetUrl
-  const { data: fetchedData, error: dataError, isLoading: isDataLoading, mutate: refreshData } = useSWR<TabData>(
-    settings.sheetUrl ? settings.sheetUrl : null,
-    fetchAllTabsData,
-    {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false
-    }
-  )
-
-  // Calculate campaigns based on fetchedData
-  const campaigns = useMemo(() => {
-    return fetchedData?.daily ? getCampaigns(fetchedData.daily) : []
+  const campaigns: Campaign[] = useMemo(() => {
+    if (!fetchedData?.daily) return []
+    return getCampaigns(fetchedData.daily)
   }, [fetchedData])
-
-  const setSheetUrl = (url: string) => {
-    setSettings(prev => ({ ...prev, sheetUrl: url }))
-  }
-
-  const setCurrency = (currency: string) => {
-    setSettings(prev => ({ ...prev, currency }))
-  }
-
-  const setSelectedCampaign = (id: string) => {
-    setSettings(prev => ({ ...prev, selectedCampaign: id }))
-  }
 
   const updateSettings = (newSettings: Partial<Settings>) => {
     setSettings(prev => ({ ...prev, ...newSettings }))
   }
 
+  const setSheetUrl = (url: string) => {
+    updateSettings({ sheetUrl: url })
+  }
+
+  const setCurrency = (currency: string) => {
+    updateSettings({ currency })
+  }
+
+  const setSelectedCampaign = (campaignId: string) => {
+    updateSettings({ selectedCampaign: campaignId })
+  }
+
+  const refreshData = () => {
+    fetchData(settings.sheetUrl)
+  }
+
+  const value: SettingsContextType = {
+    settings,
+    updateSettings,
+    setSheetUrl,
+    setCurrency,
+    setSelectedCampaign,
+    fetchedData,
+    dataError,
+    isDataLoading,
+    refreshData,
+    campaigns,
+  }
+
   return (
-    <SettingsContext.Provider value={{
-      settings,
-      updateSettings,
-      setSheetUrl,
-      setCurrency,
-      setSelectedCampaign,
-      fetchedData,
-      dataError,
-      isDataLoading,
-      refreshData: () => refreshData(),
-      campaigns
-    }}>
+    <SettingsContext.Provider value={value}>
       {children}
     </SettingsContext.Provider>
   )

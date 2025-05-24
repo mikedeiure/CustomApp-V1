@@ -6,6 +6,7 @@ import { formatCurrency, formatNumber, formatPercent } from '@/lib/utils'
 import type { SearchTermMetric, TabData } from '@/lib/types'
 import { calculateAllSearchTermMetrics, type CalculatedSearchTermMetric } from '@/lib/metrics'
 import { getDateRangeFromData, getDefaultDateRange } from '@/lib/dateUtils'
+import { type MatchType } from '@/lib/export'
 import {
     Table,
     TableBody,
@@ -23,6 +24,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import { MatchTypeSelector } from '@/components/MatchTypeSelector'
 import { DownloadButton } from '@/components/DownloadButton'
 import {
     Pagination,
@@ -48,6 +50,7 @@ export default function TermsPage() {
     const [currentPage, setCurrentPage] = useState(1)
     const [searchTerm, setSearchTerm] = useState('')
     const [searchMode, setSearchMode] = useState<SearchMode>('contains')
+    const [matchType, setMatchType] = useState<MatchType>('broad')
 
     // --- Hooks called unconditionally at the top --- 
     const searchTermsRaw = useMemo(() => (fetchedData?.searchTerms || []) as SearchTermMetric[], [fetchedData]);
@@ -344,17 +347,24 @@ export default function TermsPage() {
 
     return (
         <div className="container mx-auto px-4 py-12 mt-16">
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-start mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Search Terms</h1>
                     <p className="text-sm text-gray-600 mt-1" dangerouslySetInnerHTML={{ __html: getResultsText() }} />
                 </div>
-                <DownloadButton 
-                    data={sortedTerms} 
-                    filename={searchTerm.trim() ? `search-terms-${searchMode}-${searchTerm.replace(/\s+/g, '-')}` : 'search-terms-export'}
-                    disabled={isDataLoading || !!dataError}
-                    dateRange={dateRange}
-                />
+                <div className="flex flex-col items-end gap-3">
+                    <MatchTypeSelector 
+                        value={matchType} 
+                        onChange={setMatchType} 
+                    />
+                    <DownloadButton 
+                        data={sortedTerms} 
+                        filename={searchTerm.trim() ? `search-terms-${searchMode}-${searchTerm.replace(/\s+/g, '-')}` : 'search-terms-export'}
+                        disabled={isDataLoading || !!dataError}
+                        dateRange={dateRange}
+                        matchType={matchType}
+                    />
+                </div>
             </div>
 
             {/* Search Input */}

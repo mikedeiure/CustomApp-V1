@@ -1,89 +1,78 @@
 // src/lib/sheetsData.ts
-import { AdMetric, Campaign, SearchTermMetric, TabData, isSearchTermMetric } from './types'
-import { SHEET_TABS, SheetTab, TAB_CONFIGS, DEFAULT_SHEET_URL } from './config'
+import type { AdMetric, SearchTermMetric, TabData, Campaign } from './types'
+import { TAB_CONFIGS, type SheetTab } from './config'
 
 async function fetchTabData(sheetUrl: string, tab: SheetTab): Promise<AdMetric[] | SearchTermMetric[]> {
   try {
     const urlWithTab = `${sheetUrl}?tab=${tab}`
+    console.log(`Fetching ${tab} data from:`, urlWithTab)
+    
     const response = await fetch(urlWithTab)
+    console.log(`Response for ${tab}:`, {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText
+    })
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch data for tab ${tab}`)
+      throw new Error(`Failed to fetch data for tab ${tab}: ${response.status} ${response.statusText}`)
     }
 
     const rawData = await response.json()
+    console.log(`Raw data for ${tab}:`, Array.isArray(rawData) ? `Array with ${rawData.length} items` : rawData)
 
     if (!Array.isArray(rawData)) {
-      console.error(`Response is not an array:`, rawData)
-      return []
+      throw new Error(`Expected array but got ${typeof rawData} for tab ${tab}`)
     }
 
-    // Parse data based on tab type
-    if (tab === 'searchTerms') {
-      return rawData.map((row: any) => ({
-        search_term: String(row['search_term'] || ''),
-        campaign: String(row['campaign'] || ''),
-        ad_group: String(row['ad_group'] || ''),
-        impr: Number(row['impr'] || 0),
-        clicks: Number(row['clicks'] || 0),
-        cost: Number(row['cost'] || 0),
-        conv: Number(row['conv'] || 0),
-        value: Number(row['value'] || 0),
-      }))
-    }
-
-    // Daily metrics
-    return rawData.map((row: any) => ({
-      campaign: String(row['campaign'] || ''),
-      campaignId: String(row['campaignId'] || ''),
-      clicks: Number(row['clicks'] || 0),
-      value: Number(row['value'] || 0),
-      conv: Number(row['conv'] || 0),
-      cost: Number(row['cost'] || 0),
-      impr: Number(row['impr'] || 0),
-      date: String(row['date'] || '')
-    }))
+    return rawData
   } catch (error) {
     console.error(`Error fetching ${tab} data:`, error)
-    return []
+    throw error
   }
 }
 
-export async function fetchAllTabsData(sheetUrl: string = DEFAULT_SHEET_URL): Promise<TabData> {
-  const results = await Promise.all(
-    SHEET_TABS.map(async tab => ({
-      tab,
-      data: await fetchTabData(sheetUrl, tab)
-    }))
-  )
+export async function fetchAllTabsData(sheetUrl: string): Promise<TabData> {
+  try {
+    console.log('Fetching all tabs data from:', sheetUrl)
+    
+    const [dailyData, searchTermsData] = await Promise.all([
+      fetchTabData(sheetUrl, 'daily'),
+      fetchTabData(sheetUrl, 'searchTerms')
+    ])
 
-  return results.reduce((acc, { tab, data }) => {
-    if (tab === 'searchTerms') {
-      acc[tab] = data as SearchTermMetric[]
-    } else {
-      acc[tab] = data as AdMetric[]
+    const tabData: TabData = {
+      daily: dailyData as AdMetric[],
+      searchTerms: searchTermsData as SearchTermMetric[]
     }
-    return acc
-  }, { daily: [], searchTerms: [] } as TabData)
+
+    console.log('Successfully fetched all data:', {
+      daily: tabData.daily.length,
+      searchTerms: tabData.searchTerms.length
+    })
+
+    return tabData
+  } catch (error) {
+    console.error('Failed to fetch all tabs data:', error)
+    throw error
+  }
 }
 
-export function getCampaigns(data: AdMetric[]): Campaign[] {
-  const campaignMap = new Map<string, { id: string; name: string; totalCost: number }>()
-
-  data.forEach(row => {
-    if (!campaignMap.has(row.campaignId)) {
-      campaignMap.set(row.campaignId, {
-        id: row.campaignId,
-        name: row.campaign,
-        totalCost: row.cost
+export function getCampaigns(daily: AdMetric[]): Campaign[] {
+  const campaignMap = new Map<string, { name: string; totalCost: number }>()
+  
+  daily.forEach(metric => {
+    if (metric.campaignId && metric.campaign) {
+      const existing = campaignMap.get(metric.campaignId)
+      campaignMap.set(metric.campaignId, {
+        name: metric.campaign,
+        totalCost: (existing?.totalCost || 0) + metric.cost
       })
-    } else {
-      const campaign = campaignMap.get(row.campaignId)!
-      campaign.totalCost += row.cost
     }
   })
 
-  return Array.from(campaignMap.values())
+  return Array.from(campaignMap.entries())
+    .map(([id, { name, totalCost }]) => ({ id, name, totalCost }))
     .sort((a, b) => b.totalCost - a.totalCost) // Sort by cost descending
 }
 
@@ -97,7 +86,7 @@ export function getMetricOptions(activeTab: SheetTab = 'daily') {
   return TAB_CONFIGS[activeTab]?.metrics || {}
 }
 
-// SWR configuration without cache control
+// SWR configuration
 export const swrConfig = {
   revalidateOnFocus: true,
   revalidateOnReconnect: true,
