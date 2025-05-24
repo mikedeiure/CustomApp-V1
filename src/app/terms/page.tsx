@@ -16,6 +16,13 @@ import {
 } from "@/components/ui/table"
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { DownloadButton } from '@/components/DownloadButton'
 import {
     Pagination,
@@ -30,6 +37,7 @@ import { Search, X } from 'lucide-react'
 
 type SortField = keyof CalculatedSearchTermMetric
 type SortDirection = 'asc' | 'desc'
+type SearchMode = 'contains' | 'exact' | 'exclude'
 
 const ROWS_PER_PAGE = 50
 
@@ -39,6 +47,7 @@ export default function TermsPage() {
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
     const [currentPage, setCurrentPage] = useState(1)
     const [searchTerm, setSearchTerm] = useState('')
+    const [searchMode, setSearchMode] = useState<SearchMode>('contains')
 
     // --- Hooks called unconditionally at the top --- 
     const searchTermsRaw = useMemo(() => (fetchedData?.searchTerms || []) as SearchTermMetric[], [fetchedData]);
@@ -55,7 +64,7 @@ export default function TermsPage() {
         return calculateAllSearchTermMetrics(searchTermsRaw)
     }, [searchTermsRaw])
 
-    // Filter search terms based on search input
+    // Filter search terms based on search input and mode
     const filteredSearchTerms = useMemo(() => {
         if (!searchTerm.trim()) {
             return calculatedSearchTerms
@@ -65,9 +74,27 @@ export default function TermsPage() {
         
         return calculatedSearchTerms.filter(term => {
             const searchableText = `${term.search_term} ${term.campaign} ${term.ad_group}`.toLowerCase()
-            return searchWords.every(word => searchableText.includes(word))
+            
+            switch (searchMode) {
+                case 'contains':
+                    return searchWords.every(word => searchableText.includes(word))
+                
+                case 'exact':
+                    // For exact match, check if any of the individual fields exactly match the search term
+                    const exactSearchTerm = searchTerm.toLowerCase().trim()
+                    return term.search_term.toLowerCase() === exactSearchTerm ||
+                           term.campaign.toLowerCase() === exactSearchTerm ||
+                           term.ad_group.toLowerCase() === exactSearchTerm
+                
+                case 'exclude':
+                    // For exclude, return items that do NOT contain any of the search words
+                    return !searchWords.some(word => searchableText.includes(word))
+                
+                default:
+                    return true
+            }
         })
-    }, [calculatedSearchTerms, searchTerm])
+    }, [calculatedSearchTerms, searchTerm, searchMode])
 
     // Calculate totals across filtered search terms
     const totalsRow = useMemo(() => {
@@ -94,8 +121,17 @@ export default function TermsPage() {
         const CPA = totals.conv > 0 ? totals.cost / totals.conv : 0
         const ROAS = totals.cost > 0 ? totals.value / totals.cost : 0
 
+        const getModeLabel = () => {
+            switch (searchMode) {
+                case 'contains': return 'filtered'
+                case 'exact': return 'exact match'
+                case 'exclude': return 'excluding'
+                default: return 'filtered'
+            }
+        }
+
         return {
-            search_term: searchTerm.trim() ? `Total (filtered)` : 'Total',
+            search_term: searchTerm.trim() ? `Total (${getModeLabel()})` : 'Total',
             campaign: '',
             ad_group: '',
             ...totals,
@@ -105,7 +141,7 @@ export default function TermsPage() {
             CPA,
             ROAS,
         } as CalculatedSearchTermMetric
-    }, [filteredSearchTerms, searchTerm])
+    }, [filteredSearchTerms, searchTerm, searchMode])
 
     // Sort filtered data
     const sortedTerms = useMemo(() => {
@@ -167,8 +203,14 @@ export default function TermsPage() {
         setCurrentPage(1) // Reset to first page when search changes
     }
 
+    const handleSearchModeChange = (mode: SearchMode) => {
+        setSearchMode(mode)
+        setCurrentPage(1) // Reset to first page when search mode changes
+    }
+
     const clearSearch = () => {
         setSearchTerm('')
+        setSearchMode('contains')
         setCurrentPage(1)
     }
 
@@ -267,9 +309,37 @@ export default function TermsPage() {
     const getResultsText = () => {
         if (searchTerm.trim()) {
             const originalCount = calculatedSearchTerms.length
-            return `Showing ${startIndex + 1}-${Math.min(endIndex, totalRows)} of ${totalRows} search terms (filtered from ${originalCount} total)`
+            const modeText = searchMode === 'contains' ? 'containing' : 
+                           searchMode === 'exact' ? 'exactly matching' : 'excluding'
+            return `Showing ${startIndex + 1}-${Math.min(endIndex, totalRows)} of ${totalRows} search terms (${modeText} &quot;${searchTerm}&quot; from ${originalCount} total)`
         }
         return `Showing ${startIndex + 1}-${Math.min(endIndex, totalRows)} of ${totalRows} search terms`
+    }
+
+    const getSearchDescription = () => {
+        switch (searchMode) {
+            case 'contains':
+                return `Searching for terms containing: &quot;${searchTerm}&quot;`
+            case 'exact':
+                return `Searching for exact matches of: &quot;${searchTerm}&quot;`
+            case 'exclude':
+                return `Excluding terms containing: &quot;${searchTerm}&quot;`
+            default:
+                return `Searching for: &quot;${searchTerm}&quot;`
+        }
+    }
+
+    const getNoResultsMessage = () => {
+        switch (searchMode) {
+            case 'contains':
+                return `No search terms found containing &quot;${searchTerm}&quot;`
+            case 'exact':
+                return `No search terms found exactly matching &quot;${searchTerm}&quot;`
+            case 'exclude':
+                return `All search terms contain &quot;${searchTerm}&quot; - no results to show`
+            default:
+                return 'No search terms found'
+        }
     }
 
     return (
@@ -277,13 +347,11 @@ export default function TermsPage() {
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Search Terms</h1>
-                    <p className="text-sm text-gray-600 mt-1">
-                        {getResultsText()}
-                    </p>
+                    <p className="text-sm text-gray-600 mt-1" dangerouslySetInnerHTML={{ __html: getResultsText() }} />
                 </div>
                 <DownloadButton 
                     data={sortedTerms} 
-                    filename={searchTerm.trim() ? `search-terms-filtered-${searchTerm.replace(/\s+/g, '-')}` : 'search-terms-export'}
+                    filename={searchTerm.trim() ? `search-terms-${searchMode}-${searchTerm.replace(/\s+/g, '-')}` : 'search-terms-export'}
                     disabled={isDataLoading || !!dataError}
                     dateRange={dateRange}
                 />
@@ -291,30 +359,40 @@ export default function TermsPage() {
 
             {/* Search Input */}
             <div className="mb-6">
-                <div className="relative max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input
-                        type="text"
-                        placeholder="Filter search terms..."
-                        value={searchTerm}
-                        onChange={(e) => handleSearchChange(e.target.value)}
-                        className="pl-10 pr-10"
-                    />
-                    {searchTerm && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={clearSearch}
-                            className="absolute right-1 top-1/2 transform -translate-y-1/2 h-auto p-1 hover:bg-gray-100"
-                        >
-                            <X className="h-4 w-4 text-gray-400" />
-                        </Button>
-                    )}
+                <div className="flex gap-2 max-w-lg">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                            type="text"
+                            placeholder="Filter search terms..."
+                            value={searchTerm}
+                            onChange={(e) => handleSearchChange(e.target.value)}
+                            className="pl-10 pr-10"
+                        />
+                        {searchTerm && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={clearSearch}
+                                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-auto p-1 hover:bg-gray-100"
+                            >
+                                <X className="h-4 w-4 text-gray-400" />
+                            </Button>
+                        )}
+                    </div>
+                    <Select value={searchMode} onValueChange={handleSearchModeChange}>
+                        <SelectTrigger className="w-32">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="contains">Contains</SelectItem>
+                            <SelectItem value="exact">Exact</SelectItem>
+                            <SelectItem value="exclude">Exclude</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
                 {searchTerm.trim() && (
-                    <p className="text-xs text-gray-500 mt-2">
-                        Searching in search terms, campaigns, and ad groups for: &quot;{searchTerm}&quot;
-                    </p>
+                    <p className="text-xs text-gray-500 mt-2" dangerouslySetInnerHTML={{ __html: getSearchDescription() }} />
                 )}
             </div>
 
@@ -408,9 +486,7 @@ export default function TermsPage() {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={13} className="text-center py-8 text-gray-500">
-                                    {searchTerm.trim() ? `No search terms found containing &quot;${searchTerm}&quot;` : 'No search terms found'}
-                                </TableCell>
+                                <TableCell colSpan={13} className="text-center py-8 text-gray-500" dangerouslySetInnerHTML={{ __html: searchTerm.trim() ? getNoResultsMessage() : 'No search terms found' }} />
                             </TableRow>
                         )}
                     </TableBody>
