@@ -15,6 +15,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { DownloadButton } from '@/components/DownloadButton'
 import {
     Pagination,
@@ -25,6 +26,7 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination"
+import { Search, X } from 'lucide-react'
 
 type SortField = keyof CalculatedSearchTermMetric
 type SortDirection = 'asc' | 'desc'
@@ -36,6 +38,7 @@ export default function TermsPage() {
     const [sortField, setSortField] = useState<SortField>('cost')
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
     const [currentPage, setCurrentPage] = useState(1)
+    const [searchTerm, setSearchTerm] = useState('')
 
     // --- Hooks called unconditionally at the top --- 
     const searchTermsRaw = useMemo(() => (fetchedData?.searchTerms || []) as SearchTermMetric[], [fetchedData]);
@@ -52,11 +55,25 @@ export default function TermsPage() {
         return calculateAllSearchTermMetrics(searchTermsRaw)
     }, [searchTermsRaw])
 
-    // Calculate totals across all search terms
-    const totalsRow = useMemo(() => {
-        if (!calculatedSearchTerms.length) return null
+    // Filter search terms based on search input
+    const filteredSearchTerms = useMemo(() => {
+        if (!searchTerm.trim()) {
+            return calculatedSearchTerms
+        }
 
-        const totals = calculatedSearchTerms.reduce((acc, term) => ({
+        const searchWords = searchTerm.toLowerCase().trim().split(/\s+/)
+        
+        return calculatedSearchTerms.filter(term => {
+            const searchableText = `${term.search_term} ${term.campaign} ${term.ad_group}`.toLowerCase()
+            return searchWords.every(word => searchableText.includes(word))
+        })
+    }, [calculatedSearchTerms, searchTerm])
+
+    // Calculate totals across filtered search terms
+    const totalsRow = useMemo(() => {
+        if (!filteredSearchTerms.length) return null
+
+        const totals = filteredSearchTerms.reduce((acc, term) => ({
             impr: acc.impr + term.impr,
             clicks: acc.clicks + term.clicks,
             cost: acc.cost + term.cost,
@@ -78,7 +95,7 @@ export default function TermsPage() {
         const ROAS = totals.cost > 0 ? totals.value / totals.cost : 0
 
         return {
-            search_term: 'Total',
+            search_term: searchTerm.trim() ? `Total (filtered)` : 'Total',
             campaign: '',
             ad_group: '',
             ...totals,
@@ -88,11 +105,11 @@ export default function TermsPage() {
             CPA,
             ROAS,
         } as CalculatedSearchTermMetric
-    }, [calculatedSearchTerms])
+    }, [filteredSearchTerms, searchTerm])
 
-    // Sort data (now using calculated terms)
+    // Sort filtered data
     const sortedTerms = useMemo(() => {
-        return [...calculatedSearchTerms].sort((a, b) => {
+        return [...filteredSearchTerms].sort((a, b) => {
             const aVal = a[sortField]
             const bVal = b[sortField]
             // Handle potential string sorting for non-numeric fields if necessary
@@ -101,7 +118,7 @@ export default function TermsPage() {
             }
             return (Number(aVal) - Number(bVal)) * (sortDirection === 'asc' ? 1 : -1)
         })
-    }, [calculatedSearchTerms, sortField, sortDirection])
+    }, [filteredSearchTerms, sortField, sortDirection])
 
     // Pagination calculations
     const totalRows = sortedTerms.length
@@ -143,6 +160,16 @@ export default function TermsPage() {
         setCurrentPage(page)
         // Scroll to top of table when page changes
         window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+
+    const handleSearchChange = (value: string) => {
+        setSearchTerm(value)
+        setCurrentPage(1) // Reset to first page when search changes
+    }
+
+    const clearSearch = () => {
+        setSearchTerm('')
+        setCurrentPage(1)
     }
 
     const SortButton = ({ field, children }: { field: SortField, children: React.ReactNode }) => (
@@ -237,21 +264,58 @@ export default function TermsPage() {
         return items
     }
 
+    const getResultsText = () => {
+        if (searchTerm.trim()) {
+            const originalCount = calculatedSearchTerms.length
+            return `Showing ${startIndex + 1}-${Math.min(endIndex, totalRows)} of ${totalRows} search terms (filtered from ${originalCount} total)`
+        }
+        return `Showing ${startIndex + 1}-${Math.min(endIndex, totalRows)} of ${totalRows} search terms`
+    }
+
     return (
         <div className="container mx-auto px-4 py-12 mt-16">
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Search Terms</h1>
                     <p className="text-sm text-gray-600 mt-1">
-                        Showing {startIndex + 1}-{Math.min(endIndex, totalRows)} of {totalRows} search terms
+                        {getResultsText()}
                     </p>
                 </div>
                 <DownloadButton 
                     data={sortedTerms} 
-                    filename="search-terms-export"
+                    filename={searchTerm.trim() ? `search-terms-filtered-${searchTerm.replace(/\s+/g, '-')}` : 'search-terms-export'}
                     disabled={isDataLoading || !!dataError}
                     dateRange={dateRange}
                 />
+            </div>
+
+            {/* Search Input */}
+            <div className="mb-6">
+                <div className="relative max-w-md">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                        type="text"
+                        placeholder="Filter search terms..."
+                        value={searchTerm}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        className="pl-10 pr-10"
+                    />
+                    {searchTerm && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={clearSearch}
+                            className="absolute right-1 top-1/2 transform -translate-y-1/2 h-auto p-1 hover:bg-gray-100"
+                        >
+                            <X className="h-4 w-4 text-gray-400" />
+                        </Button>
+                    )}
+                </div>
+                {searchTerm.trim() && (
+                    <p className="text-xs text-gray-500 mt-2">
+                        Searching in search terms, campaigns, and ad groups for: &quot;{searchTerm}&quot;
+                    </p>
+                )}
             </div>
 
             <div className="rounded-md border">
@@ -322,25 +386,33 @@ export default function TermsPage() {
                         )}
                         
                         {/* Regular Data Rows */}
-                        {currentPageData.map((term, i) => (
-                            <TableRow key={`${term.search_term}-${term.campaign}-${term.ad_group}-${startIndex + i}`}>
-                                <TableCell className="font-medium">{term.search_term}</TableCell>
-                                <TableCell>{term.campaign}</TableCell>
-                                <TableCell>{term.ad_group}</TableCell>
-                                <TableCell className="text-right">{formatNumber(term.impr)}</TableCell>
-                                <TableCell className="text-right">{formatNumber(term.clicks)}</TableCell>
-                                <TableCell className="text-right">{formatCurrency(term.cost, settings.currency)}</TableCell>
-                                <TableCell className="text-right">{formatNumber(term.conv)}</TableCell>
-                                <TableCell className="text-right">{formatCurrency(term.value, settings.currency)}</TableCell>
-                                <TableCell className="text-right">{formatPercent(term.CTR)}</TableCell>
-                                <TableCell className="text-right">{formatCurrency(term.CPC, settings.currency)}</TableCell>
-                                <TableCell className="text-right">{formatPercent(term.CvR)}</TableCell>
-                                <TableCell className="text-right">{formatCurrency(term.CPA, settings.currency)}</TableCell>
-                                <TableCell className="text-right">
-                                    {(term.ROAS && isFinite(term.ROAS)) ? `${term.ROAS.toFixed(2)}x` : '-'}
+                        {currentPageData.length > 0 ? (
+                            currentPageData.map((term, i) => (
+                                <TableRow key={`${term.search_term}-${term.campaign}-${term.ad_group}-${startIndex + i}`}>
+                                    <TableCell className="font-medium">{term.search_term}</TableCell>
+                                    <TableCell>{term.campaign}</TableCell>
+                                    <TableCell>{term.ad_group}</TableCell>
+                                    <TableCell className="text-right">{formatNumber(term.impr)}</TableCell>
+                                    <TableCell className="text-right">{formatNumber(term.clicks)}</TableCell>
+                                    <TableCell className="text-right">{formatCurrency(term.cost, settings.currency)}</TableCell>
+                                    <TableCell className="text-right">{formatNumber(term.conv)}</TableCell>
+                                    <TableCell className="text-right">{formatCurrency(term.value, settings.currency)}</TableCell>
+                                    <TableCell className="text-right">{formatPercent(term.CTR)}</TableCell>
+                                    <TableCell className="text-right">{formatCurrency(term.CPC, settings.currency)}</TableCell>
+                                    <TableCell className="text-right">{formatPercent(term.CvR)}</TableCell>
+                                    <TableCell className="text-right">{formatCurrency(term.CPA, settings.currency)}</TableCell>
+                                    <TableCell className="text-right">
+                                        {(term.ROAS && isFinite(term.ROAS)) ? `${term.ROAS.toFixed(2)}x` : '-'}
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={13} className="text-center py-8 text-gray-500">
+                                    {searchTerm.trim() ? `No search terms found containing &quot;${searchTerm}&quot;` : 'No search terms found'}
                                 </TableCell>
                             </TableRow>
-                        ))}
+                        )}
                     </TableBody>
                 </Table>
             </div>
