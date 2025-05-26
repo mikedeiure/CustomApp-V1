@@ -63,8 +63,9 @@ export function getCampaigns(daily: AdMetric[]): Campaign[] {
   
   daily.forEach(metric => {
     if (metric.campaignId && metric.campaign) {
-      const existing = campaignMap.get(metric.campaignId)
-      campaignMap.set(metric.campaignId, {
+      const campaignId = String(metric.campaignId) // Ensure string conversion
+      const existing = campaignMap.get(campaignId)
+      campaignMap.set(campaignId, {
         name: metric.campaign,
         totalCost: (existing?.totalCost || 0) + metric.cost
       })
@@ -78,7 +79,7 @@ export function getCampaigns(daily: AdMetric[]): Campaign[] {
 
 export function getMetricsByDate(data: AdMetric[], campaignId: string): AdMetric[] {
   return data
-    .filter(metric => metric.campaignId === campaignId)
+    .filter(metric => String(metric.campaignId) === String(campaignId))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 }
 

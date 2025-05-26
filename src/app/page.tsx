@@ -65,7 +65,7 @@ export default function DashboardPage() {
 
     const dailyMetrics = calculateDailyMetrics(
         selectedCampaignId
-            ? (fetchedData?.daily || []).filter(d => d.campaignId === selectedCampaignId)
+            ? (fetchedData?.daily || []).filter(d => String(d.campaignId) === String(selectedCampaignId))
             : aggregateMetricsByDate(fetchedData?.daily || [])
     )
 
@@ -153,7 +153,7 @@ function DashboardLayout({ children, error }: { children: React.ReactNode, error
     return (
         <div className="container mx-auto px-4 py-12 mt-16">
             <div className="flex justify-between items-center mb-8">
-                <h1 className="text-3xl font-bold text-gray-900">Build the Agent - Participant Starter Agent</h1>
+                <h1 className="text-3xl font-bold text-gray-900">Rock Power Marketing - Search Terms App</h1>
             </div>
             {error && <div className="text-red-500 mb-4">{error}</div>}
             {children}
