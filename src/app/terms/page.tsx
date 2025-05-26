@@ -430,7 +430,13 @@ export default function TermsPage() {
             <div className="flex justify-between items-start mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Search Terms</h1>
-                    <p className="text-sm text-gray-600 mt-1" dangerouslySetInnerHTML={{ __html: getResultsText() }} />
+                    <div className="flex items-center gap-4 mt-1">
+                        <p className="text-sm text-gray-600" dangerouslySetInnerHTML={{ __html: getResultsText() }} />
+                        <span className="text-xs text-gray-500">•</span>
+                        <span className="text-sm text-gray-600">
+                            Data for: <span className="font-medium">{dateRange}</span>
+                        </span>
+                    </div>
                 </div>
                 <div className="flex flex-col items-end gap-3">
                     <MatchTypeSelector 

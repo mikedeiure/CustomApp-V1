@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useSettings } from '@/lib/contexts/SettingsContext'
 import { getCampaigns } from '@/lib/sheetsData'
 import type { AdMetric, DailyMetrics, TabData } from '@/lib/types'
@@ -11,6 +11,7 @@ import { MetricCard } from '@/components/MetricCard'
 import { MetricsChart } from '@/components/MetricsChart'
 import { CampaignSelect } from '@/components/CampaignSelect'
 import { formatCurrency, formatPercent, formatConversions } from '@/lib/utils'
+import { getDateRangeFromData, getDefaultDateRange } from '@/lib/dateUtils'
 import { COLORS } from '@/lib/config'
 
 type DisplayMetric = 'impr' | 'clicks' | 'CTR' | 'CPC' | 'cost' |
@@ -33,6 +34,13 @@ export default function DashboardPage() {
     const { settings, fetchedData, dataError, isDataLoading, campaigns } = useSettings()
     const [selectedMetrics, setSelectedMetrics] = useState<[DisplayMetric, DisplayMetric]>(['cost', 'value'])
     const [selectedCampaignId, setSelectedCampaignId] = useState<string>('')
+
+    // Calculate date range from daily data (must be called before any conditional returns)
+    const dateRange = useMemo(() => {
+        const dailyData = fetchedData?.daily || []
+        const range = getDateRangeFromData(dailyData)
+        return range ? range.display : getDefaultDateRange()
+    }, [fetchedData])
 
     // Aggregate metrics by date when viewing all campaigns
     const aggregateMetricsByDate = (data: AdMetric[]): AdMetric[] => {
@@ -107,11 +115,16 @@ export default function DashboardPage() {
     return (
         <DashboardLayout error={dataError ? 'Failed to load data. Please check your Sheet URL.' : undefined}>
             <div className="space-y-6">
-                <CampaignSelect
-                    campaigns={campaigns || []}
-                    selectedId={selectedCampaignId}
-                    onSelect={setSelectedCampaignId}
-                />
+                <div className="flex justify-between items-center">
+                    <CampaignSelect
+                        campaigns={campaigns || []}
+                        selectedId={selectedCampaignId}
+                        onSelect={setSelectedCampaignId}
+                    />
+                    <div className="text-sm text-gray-600">
+                        Data for: <span className="font-medium">{dateRange}</span>
+                    </div>
+                </div>
 
                 {[1, 2].map(row => (
                     <div key={row} className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">

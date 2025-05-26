@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Settings } from 'lucide-react'
@@ -14,9 +15,16 @@ export function Navigation() {
             <div className="container mx-auto px-4 h-16 flex items-center">
                 <div className="flex items-center justify-between w-full">
                     <div className="flex items-center space-x-6">
-                        <Link href="/" className="flex items-center">
-                            <span className="font-bold">
-                                Google Ads Dashboard
+                        <Link href="/" className="flex items-center space-x-3">
+                            <Image
+                                src="/RPM logo.png"
+                                alt="Rock Power Marketing"
+                                width={288}
+                                height={108}
+                                className="h-16 w-auto"
+                            />
+                            <span className="font-bold text-gray-700">
+                                Google Campaign Stats
                             </span>
                         </Link>
                         <Link
