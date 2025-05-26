@@ -51,9 +51,37 @@ export default function TermsPage() {
     const [searchTerm, setSearchTerm] = useState('')
     const [searchMode, setSearchMode] = useState<SearchMode>('contains')
     const [matchType, setMatchType] = useState<MatchType>('broad')
+    const [selectedCampaignFilter, setSelectedCampaignFilter] = useState<string>('')
+    const [selectedAdGroupFilter, setSelectedAdGroupFilter] = useState<string>('')
 
     // --- Hooks called unconditionally at the top --- 
     const searchTermsRaw = useMemo(() => (fetchedData?.searchTerms || []) as SearchTermMetric[], [fetchedData]);
+
+    // Extract unique campaigns from search terms data
+    const campaignsFromSearchTerms = useMemo(() => {
+        const campaignSet = new Set<string>()
+        searchTermsRaw.forEach(term => {
+            if (term.campaign && term.campaign.trim()) {
+                campaignSet.add(term.campaign)
+            }
+        })
+        return Array.from(campaignSet).sort()
+    }, [searchTermsRaw])
+
+    // Extract unique ad groups from search terms data (filtered by campaign if selected)
+    const adGroupsFromSearchTerms = useMemo(() => {
+        const adGroupSet = new Set<string>()
+        const relevantTerms = selectedCampaignFilter 
+            ? searchTermsRaw.filter(term => term.campaign === selectedCampaignFilter)
+            : searchTermsRaw
+            
+        relevantTerms.forEach(term => {
+            if (term.ad_group && term.ad_group.trim()) {
+                adGroupSet.add(term.ad_group)
+            }
+        })
+        return Array.from(adGroupSet).sort()
+    }, [searchTermsRaw, selectedCampaignFilter])
 
     // Calculate date range from daily data
     const dateRange = useMemo(() => {
@@ -62,10 +90,27 @@ export default function TermsPage() {
         return range ? range.display : getDefaultDateRange()
     }, [fetchedData])
 
-    // Calculate derived metrics for all terms using useMemo
+    // Filter search terms by campaign and ad group first, then calculate metrics
+    const campaignAndAdGroupFilteredSearchTerms = useMemo(() => {
+        let filtered = searchTermsRaw
+        
+        // Apply campaign filter if selected
+        if (selectedCampaignFilter) {
+            filtered = filtered.filter(term => term.campaign === selectedCampaignFilter)
+        }
+        
+        // Apply ad group filter if selected
+        if (selectedAdGroupFilter) {
+            filtered = filtered.filter(term => term.ad_group === selectedAdGroupFilter)
+        }
+        
+        return filtered
+    }, [searchTermsRaw, selectedCampaignFilter, selectedAdGroupFilter])
+
+    // Calculate derived metrics for filtered terms using useMemo
     const calculatedSearchTerms = useMemo(() => {
-        return calculateAllSearchTermMetrics(searchTermsRaw)
-    }, [searchTermsRaw])
+        return calculateAllSearchTermMetrics(campaignAndAdGroupFilteredSearchTerms)
+    }, [campaignAndAdGroupFilteredSearchTerms])
 
     // Filter search terms based on search input and mode
     const filteredSearchTerms = useMemo(() => {
@@ -133,8 +178,16 @@ export default function TermsPage() {
             }
         }
 
+        const getTotalLabel = () => {
+            const parts = []
+            if (selectedCampaignFilter) parts.push('campaign filtered')
+            if (selectedAdGroupFilter) parts.push('ad group filtered')
+            if (searchTerm.trim()) parts.push(getModeLabel())
+            return parts.length > 0 ? `Total (${parts.join(', ')})` : 'Total'
+        }
+
         return {
-            search_term: searchTerm.trim() ? `Total (${getModeLabel()})` : 'Total',
+            search_term: getTotalLabel(),
             campaign: '',
             ad_group: '',
             ...totals,
@@ -144,7 +197,7 @@ export default function TermsPage() {
             CPA,
             ROAS,
         } as CalculatedSearchTermMetric
-    }, [filteredSearchTerms, searchTerm, searchMode])
+    }, [filteredSearchTerms, searchTerm, searchMode, selectedCampaignFilter, selectedAdGroupFilter])
 
     // Sort filtered data
     const sortedTerms = useMemo(() => {
@@ -215,6 +268,20 @@ export default function TermsPage() {
         setSearchTerm('')
         setSearchMode('contains')
         setCurrentPage(1)
+    }
+
+    const handleCampaignFilterChange = (campaign: string) => {
+        // Convert "all" back to empty string for our internal state
+        setSelectedCampaignFilter(campaign === "all" ? "" : campaign)
+        // Reset ad group filter when campaign changes
+        setSelectedAdGroupFilter("")
+        setCurrentPage(1) // Reset to first page when campaign filter changes
+    }
+
+    const handleAdGroupFilterChange = (adGroup: string) => {
+        // Convert "all" back to empty string for our internal state
+        setSelectedAdGroupFilter(adGroup === "all" ? "" : adGroup)
+        setCurrentPage(1) // Reset to first page when ad group filter changes
     }
 
     const SortButton = ({ field, children }: { field: SortField, children: React.ReactNode }) => (
@@ -310,11 +377,24 @@ export default function TermsPage() {
     }
 
     const getResultsText = () => {
-        if (searchTerm.trim()) {
-            const originalCount = calculatedSearchTerms.length
-            const modeText = searchMode === 'contains' ? 'containing' : 
-                           searchMode === 'exact' ? 'exactly matching' : 'excluding'
-            return `Showing ${startIndex + 1}-${Math.min(endIndex, totalRows)} of ${totalRows} search terms (${modeText} &quot;${searchTerm}&quot; from ${originalCount} total)`
+        const hasFilters = searchTerm.trim() || selectedCampaignFilter || selectedAdGroupFilter
+        
+        if (hasFilters) {
+            const filters = []
+            if (selectedCampaignFilter) {
+                filters.push(`campaign "${selectedCampaignFilter}"`)
+            }
+            if (selectedAdGroupFilter) {
+                filters.push(`ad group "${selectedAdGroupFilter}"`)
+            }
+            if (searchTerm.trim()) {
+                const modeText = searchMode === 'contains' ? 'containing' : 
+                               searchMode === 'exact' ? 'exactly matching' : 'excluding'
+                filters.push(`${modeText} &quot;${searchTerm}&quot;`)
+            }
+            
+            const originalCount = searchTermsRaw.length
+            return `Showing ${startIndex + 1}-${Math.min(endIndex, totalRows)} of ${totalRows} search terms (${filters.join(', ')} from ${originalCount} total)`
         }
         return `Showing ${startIndex + 1}-${Math.min(endIndex, totalRows)} of ${totalRows} search terms`
     }
@@ -364,6 +444,66 @@ export default function TermsPage() {
                         dateRange={dateRange}
                         matchType={matchType}
                     />
+                </div>
+            </div>
+
+            {/* Campaign Filter */}
+            <div className="mb-4">
+                <div className="flex items-center gap-3">
+                    <label className="text-sm font-medium text-gray-700">Filter by Campaign:</label>
+                    <Select value={selectedCampaignFilter || "all"} onValueChange={handleCampaignFilterChange}>
+                        <SelectTrigger className="w-80">
+                            <SelectValue placeholder="All Campaigns" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Campaigns</SelectItem>
+                            {campaignsFromSearchTerms.map((campaign) => (
+                                <SelectItem key={campaign} value={campaign}>
+                                    {campaign}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {selectedCampaignFilter && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCampaignFilterChange('all')}
+                            className="text-xs"
+                        >
+                            Clear Filter
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            {/* Ad Group Filter */}
+            <div className="mb-4">
+                <div className="flex items-center gap-3">
+                    <label className="text-sm font-medium text-gray-700">Filter by Ad Group:</label>
+                    <Select value={selectedAdGroupFilter || "all"} onValueChange={handleAdGroupFilterChange}>
+                        <SelectTrigger className="w-80">
+                            <SelectValue placeholder="All Ad Groups" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Ad Groups</SelectItem>
+                            {adGroupsFromSearchTerms.map((adGroup) => (
+                                <SelectItem key={adGroup} value={adGroup}>
+                                    {adGroup}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {selectedAdGroupFilter && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAdGroupFilterChange('all')}
+                            className="text-xs"
+                        >
+                            Clear Filter
+                        </Button>
+                    )}
                 </div>
             </div>
 
