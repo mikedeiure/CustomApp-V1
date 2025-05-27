@@ -1,12 +1,14 @@
 const SHEET_URL = '';                     // add your sheet url here
 const SEARCH_TERMS_TAB = 'SearchTerms';
 const DAILY_TAB = 'Daily';
+const KEYWORDS_TAB = 'Keywords';
 
 
 // GAQL query for search terms
 const SEARCH_TERMS_QUERY = `
 SELECT 
-  search_term_view.search_term, 
+  search_term_view.search_term,
+  search_term_view.status,
   campaign.name,
   ad_group.name,
   metrics.impressions, 
@@ -37,6 +39,45 @@ WHERE segments.date DURING LAST_30_DAYS
 ORDER BY segments.date DESC, metrics.cost_micros DESC
 `;
 
+// GAQL query for keywords data
+const KEYWORDS_QUERY = `
+SELECT
+  campaign.name,
+  ad_group.name,
+  ad_group_criterion.keyword.text,
+  ad_group_criterion.keyword.match_type,
+  ad_group_criterion.status,
+  metrics.impressions,
+  metrics.clicks,
+  metrics.cost_micros,
+  metrics.conversions,
+  metrics.conversions_value
+FROM keyword_view
+WHERE segments.date DURING LAST_30_DAYS
+  AND campaign.advertising_channel_type = "SEARCH"
+  AND ad_group_criterion.type = "KEYWORD"
+ORDER BY metrics.cost_micros DESC
+`;
+
+// GAQL query for search terms with keywords (alternative approach)
+const SEARCH_TERMS_WITH_KEYWORDS_QUERY = `
+SELECT 
+  search_term_view.search_term,
+  search_term_view.status,
+  campaign.name,
+  ad_group.name,
+  metrics.impressions, 
+  metrics.clicks, 
+  metrics.cost_micros, 
+  metrics.conversions, 
+  metrics.conversions_value
+FROM search_term_view
+WHERE segments.date DURING LAST_30_DAYS
+  AND campaign.advertising_channel_type = "SEARCH"
+  AND metrics.impressions >= 30
+ORDER BY metrics.cost_micros DESC
+`;
+
 function main() {
   try {
     // Access the Google Sheet
@@ -54,7 +95,7 @@ function main() {
       ss,
       SEARCH_TERMS_TAB,
       // Headers: Only core metrics + identifiers
-      ["search_term", "campaign", "ad_group", "impr", "clicks", "cost", "conv", "value"],
+      ["search_term", "status", "campaign", "ad_group", "impr", "clicks", "cost", "conv", "value"],
       SEARCH_TERMS_QUERY,
       calculateSearchTermsMetrics // Still use this, but it will be simplified
     );
@@ -67,6 +108,16 @@ function main() {
       ["campaign", "campaignId", "impr", "clicks", "cost", "conv", "value", "date"],
       DAILY_QUERY,
       processDailyData // This function already returns data mostly in this format
+    );
+
+    // Process Keywords tab
+    processTab(
+      ss,
+      KEYWORDS_TAB,
+      // Headers: keyword info + core metrics
+      ["campaign", "ad_group", "keyword", "match_type", "status", "impr", "clicks", "cost", "conv", "value"],
+      KEYWORDS_QUERY,
+      processKeywordsData
     );
 
   } catch (e) {
@@ -112,6 +163,7 @@ function calculateSearchTermsMetrics(rows) {
   while (rows.hasNext()) {
     const row = rows.next();
     const searchTerm = row['search_term_view.search_term'];
+    const status = row['search_term_view.status'];
     const campaign = row['campaign.name'];
     const adGroup = row['ad_group.name'];
     const impr = parseInt(row['metrics.impressions'], 10) || 0;
@@ -122,7 +174,7 @@ function calculateSearchTermsMetrics(rows) {
 
     const cost = costMicros / 1000000;
 
-    const newRow = [searchTerm, campaign, adGroup, impr, clicks, cost, conv, value];
+    const newRow = [searchTerm, status, campaign, adGroup, impr, clicks, cost, conv, value];
 
     data.push(newRow);
   }
@@ -149,6 +201,30 @@ function processDailyData(rows) {
     const newRow = [campaign, campaignId, impr, clicks, cost, conv, value, date];
 
     // Push new row to the data array
+    data.push(newRow);
+  }
+  return data;
+}
+
+function processKeywordsData(rows) {
+  const data = [];
+  while (rows.hasNext()) {
+    const row = rows.next();
+    const campaign = row['campaign.name'];
+    const adGroup = row['ad_group.name'];
+    const keyword = row['ad_group_criterion.keyword.text'];
+    const matchType = row['ad_group_criterion.keyword.match_type'];
+    const status = row['ad_group_criterion.status'];
+    const impr = parseInt(row['metrics.impressions'], 10) || 0;
+    const clicks = parseInt(row['metrics.clicks'], 10) || 0;
+    const costMicros = parseInt(row['metrics.cost_micros'], 10) || 0;
+    const conv = parseFloat(row['metrics.conversions']) || 0;
+    const value = parseFloat(row['metrics.conversions_value']) || 0;
+
+    const cost = costMicros / 1000000;
+
+    const newRow = [campaign, adGroup, keyword, matchType, status, impr, clicks, cost, conv, value];
+
     data.push(newRow);
   }
   return data;

@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select"
 import { MatchTypeSelector } from '@/components/MatchTypeSelector'
 import { DownloadButton } from '@/components/DownloadButton'
+import { SearchTermsTreeView } from '@/components/SearchTermsTreeView'
 import {
     Pagination,
     PaginationContent,
@@ -35,11 +36,12 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination"
-import { Search, X } from 'lucide-react'
+import { Search, X, Table as TableIcon, TreePine } from 'lucide-react'
 
 type SortField = keyof CalculatedSearchTermMetric
 type SortDirection = 'asc' | 'desc'
 type SearchMode = 'contains' | 'exact' | 'exclude'
+type ViewMode = 'table' | 'tree'
 
 const ROWS_PER_PAGE = 50
 
@@ -53,6 +55,7 @@ export default function TermsPage() {
     const [matchType, setMatchType] = useState<MatchType>('broad')
     const [selectedCampaignFilter, setSelectedCampaignFilter] = useState<string>('')
     const [selectedAdGroupFilter, setSelectedAdGroupFilter] = useState<string>('')
+    const [viewMode, setViewMode] = useState<ViewMode>('table')
 
     // --- Hooks called unconditionally at the top --- 
     const searchTermsRaw = useMemo(() => (fetchedData?.searchTerms || []) as SearchTermMetric[], [fetchedData]);
@@ -282,6 +285,10 @@ export default function TermsPage() {
         // Convert "all" back to empty string for our internal state
         setSelectedAdGroupFilter(adGroup === "all" ? "" : adGroup)
         setCurrentPage(1) // Reset to first page when ad group filter changes
+    }
+
+    const handleViewModeChange = (mode: ViewMode) => {
+        setViewMode(mode)
     }
 
     const SortButton = ({ field, children }: { field: SortField, children: React.ReactNode }) => (
@@ -552,124 +559,166 @@ export default function TermsPage() {
                 )}
             </div>
 
-            <div className="rounded-md border">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-[200px]">
-                                <SortButton field="search_term">Search Term</SortButton>
-                            </TableHead>
-                            <TableHead>
-                                <SortButton field="campaign">Campaign</SortButton>
-                            </TableHead>
-                            <TableHead>
-                                <SortButton field="ad_group">Ad Group</SortButton>
-                            </TableHead>
-                            <TableHead className="text-right">
-                                <SortButton field="impr">Impr</SortButton>
-                            </TableHead>
-                            <TableHead className="text-right">
-                                <SortButton field="clicks">Clicks</SortButton>
-                            </TableHead>
-                            <TableHead className="text-right">
-                                <SortButton field="cost">Cost</SortButton>
-                            </TableHead>
-                            <TableHead className="text-right">
-                                <SortButton field="conv">Conv</SortButton>
-                            </TableHead>
-                            <TableHead className="text-right">
-                                <SortButton field="value">Value</SortButton>
-                            </TableHead>
-                            <TableHead className="text-right">
-                                <SortButton field="CTR">CTR</SortButton>
-                            </TableHead>
-                            <TableHead className="text-right">
-                                <SortButton field="CPC">CPC</SortButton>
-                            </TableHead>
-                            <TableHead className="text-right">
-                                <SortButton field="CvR">CvR</SortButton>
-                            </TableHead>
-                            <TableHead className="text-right">
-                                <SortButton field="CPA">CPA</SortButton>
-                            </TableHead>
-                            <TableHead className="text-right">
-                                <SortButton field="ROAS">ROAS</SortButton>
-                            </TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {/* Totals Row */}
-                        {totalsRow && (
-                            <TableRow className="bg-gray-50 border-b-2 border-gray-200 font-semibold">
-                                <TableCell className="font-bold text-gray-900">{totalsRow.search_term}</TableCell>
-                                <TableCell className="text-gray-600">All Campaigns</TableCell>
-                                <TableCell className="text-gray-600">All Ad Groups</TableCell>
-                                <TableCell className="text-right">{formatNumber(totalsRow.impr)}</TableCell>
-                                <TableCell className="text-right">{formatNumber(totalsRow.clicks)}</TableCell>
-                                <TableCell className="text-right">{formatCurrency(totalsRow.cost, settings.currency)}</TableCell>
-                                <TableCell className="text-right">{formatNumber(totalsRow.conv)}</TableCell>
-                                <TableCell className="text-right">{formatCurrency(totalsRow.value, settings.currency)}</TableCell>
-                                <TableCell className="text-right">{formatPercent(totalsRow.CTR)}</TableCell>
-                                <TableCell className="text-right">{formatCurrency(totalsRow.CPC, settings.currency)}</TableCell>
-                                <TableCell className="text-right">{formatPercent(totalsRow.CvR)}</TableCell>
-                                <TableCell className="text-right">{formatCurrency(totalsRow.CPA, settings.currency)}</TableCell>
-                                <TableCell className="text-right">
-                                    {(totalsRow.ROAS && isFinite(totalsRow.ROAS)) ? `${totalsRow.ROAS.toFixed(2)}x` : '-'}
-                                </TableCell>
-                            </TableRow>
-                        )}
-                        
-                        {/* Regular Data Rows */}
-                        {currentPageData.length > 0 ? (
-                            currentPageData.map((term, i) => (
-                                <TableRow key={`${term.search_term}-${term.campaign}-${term.ad_group}-${startIndex + i}`}>
-                                    <TableCell className="font-medium">{term.search_term}</TableCell>
-                                    <TableCell>{term.campaign}</TableCell>
-                                    <TableCell>{term.ad_group}</TableCell>
-                                    <TableCell className="text-right">{formatNumber(term.impr)}</TableCell>
-                                    <TableCell className="text-right">{formatNumber(term.clicks)}</TableCell>
-                                    <TableCell className="text-right">{formatCurrency(term.cost, settings.currency)}</TableCell>
-                                    <TableCell className="text-right">{formatNumber(term.conv)}</TableCell>
-                                    <TableCell className="text-right">{formatCurrency(term.value, settings.currency)}</TableCell>
-                                    <TableCell className="text-right">{formatPercent(term.CTR)}</TableCell>
-                                    <TableCell className="text-right">{formatCurrency(term.CPC, settings.currency)}</TableCell>
-                                    <TableCell className="text-right">{formatPercent(term.CvR)}</TableCell>
-                                    <TableCell className="text-right">{formatCurrency(term.CPA, settings.currency)}</TableCell>
-                                    <TableCell className="text-right">
-                                        {(term.ROAS && isFinite(term.ROAS)) ? `${term.ROAS.toFixed(2)}x` : '-'}
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={13} className="text-center py-8 text-gray-500" dangerouslySetInnerHTML={{ __html: searchTerm.trim() ? getNoResultsMessage() : 'No search terms found' }} />
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+            {/* View Toggle */}
+            <div className="mb-6">
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant={viewMode === 'table' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleViewModeChange('table')}
+                        className={`flex items-center gap-2 ${
+                            viewMode === 'table' 
+                                ? 'bg-gray-900 text-white hover:bg-gray-800' 
+                                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                    >
+                        <TableIcon className="h-4 w-4" />
+                        Table View
+                    </Button>
+                    <Button
+                        variant={viewMode === 'tree' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleViewModeChange('tree')}
+                        className={`flex items-center gap-2 ${
+                            viewMode === 'tree' 
+                                ? 'bg-gray-900 text-white hover:bg-gray-800' 
+                                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                    >
+                        <TreePine className="h-4 w-4" />
+                        Tree View
+                    </Button>
+                </div>
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="mt-8">
-                    <Pagination>
-                        <PaginationContent>
-                            <PaginationItem>
-                                <PaginationPrevious 
-                                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                                />
-                            </PaginationItem>
-                            {renderPaginationItems()}
-                            <PaginationItem>
-                                <PaginationNext 
-                                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                                />
-                            </PaginationItem>
-                        </PaginationContent>
-                    </Pagination>
-                </div>
+            {/* Conditional View Rendering */}
+            {viewMode === 'table' ? (
+                <>
+                    <div className="rounded-md border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[200px]">
+                                        <SortButton field="search_term">Search Term</SortButton>
+                                    </TableHead>
+                                    <TableHead>
+                                        <SortButton field="campaign">Campaign</SortButton>
+                                    </TableHead>
+                                    <TableHead>
+                                        <SortButton field="ad_group">Ad Group</SortButton>
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        <SortButton field="impr">Impr</SortButton>
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        <SortButton field="clicks">Clicks</SortButton>
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        <SortButton field="cost">Cost</SortButton>
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        <SortButton field="conv">Conv</SortButton>
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        <SortButton field="value">Value</SortButton>
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        <SortButton field="CTR">CTR</SortButton>
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        <SortButton field="CPC">CPC</SortButton>
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        <SortButton field="CvR">CvR</SortButton>
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        <SortButton field="CPA">CPA</SortButton>
+                                    </TableHead>
+                                    <TableHead className="text-right">
+                                        <SortButton field="ROAS">ROAS</SortButton>
+                                    </TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {/* Totals Row */}
+                                {totalsRow && (
+                                    <TableRow className="bg-gray-50 border-b-2 border-gray-200 font-semibold">
+                                        <TableCell className="font-bold text-gray-900">{totalsRow.search_term}</TableCell>
+                                        <TableCell className="text-gray-600">All Campaigns</TableCell>
+                                        <TableCell className="text-gray-600">All Ad Groups</TableCell>
+                                        <TableCell className="text-right">{formatNumber(totalsRow.impr)}</TableCell>
+                                        <TableCell className="text-right">{formatNumber(totalsRow.clicks)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(totalsRow.cost, settings.currency)}</TableCell>
+                                        <TableCell className="text-right">{formatNumber(totalsRow.conv)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(totalsRow.value, settings.currency)}</TableCell>
+                                        <TableCell className="text-right">{formatPercent(totalsRow.CTR)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(totalsRow.CPC, settings.currency)}</TableCell>
+                                        <TableCell className="text-right">{formatPercent(totalsRow.CvR)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(totalsRow.CPA, settings.currency)}</TableCell>
+                                        <TableCell className="text-right">
+                                            {(totalsRow.ROAS && isFinite(totalsRow.ROAS)) ? `${totalsRow.ROAS.toFixed(2)}x` : '-'}
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                                
+                                {/* Regular Data Rows */}
+                                {currentPageData.length > 0 ? (
+                                    currentPageData.map((term, i) => (
+                                        <TableRow key={`${term.search_term}-${term.campaign}-${term.ad_group}-${startIndex + i}`}>
+                                            <TableCell className="font-medium">{term.search_term}</TableCell>
+                                            <TableCell>{term.campaign}</TableCell>
+                                            <TableCell>{term.ad_group}</TableCell>
+                                            <TableCell className="text-right">{formatNumber(term.impr)}</TableCell>
+                                            <TableCell className="text-right">{formatNumber(term.clicks)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(term.cost, settings.currency)}</TableCell>
+                                            <TableCell className="text-right">{formatNumber(term.conv)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(term.value, settings.currency)}</TableCell>
+                                            <TableCell className="text-right">{formatPercent(term.CTR)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(term.CPC, settings.currency)}</TableCell>
+                                            <TableCell className="text-right">{formatPercent(term.CvR)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(term.CPA, settings.currency)}</TableCell>
+                                            <TableCell className="text-right">
+                                                {(term.ROAS && isFinite(term.ROAS)) ? `${term.ROAS.toFixed(2)}x` : '-'}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={13} className="text-center py-8 text-gray-500" dangerouslySetInnerHTML={{ __html: searchTerm.trim() ? getNoResultsMessage() : 'No search terms found' }} />
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="mt-8">
+                            <Pagination>
+                                <PaginationContent>
+                                    <PaginationItem>
+                                        <PaginationPrevious 
+                                            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                                            className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                        />
+                                    </PaginationItem>
+                                    {renderPaginationItems()}
+                                    <PaginationItem>
+                                        <PaginationNext 
+                                            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                                            className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                        />
+                                    </PaginationItem>
+                                </PaginationContent>
+                            </Pagination>
+                        </div>
+                    )}
+                </>
+            ) : (
+                <SearchTermsTreeView 
+                    data={filteredSearchTerms} 
+                    currency={settings.currency}
+                />
             )}
         </div>
     )
