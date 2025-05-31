@@ -14,6 +14,13 @@ export interface Campaign {
   totalCost: number
 }
 
+export interface AdGroup {
+  name: string
+  campaign: string
+  totalCost: number
+  totalConversions: number
+}
+
 // Daily campaign metrics
 export interface AdMetric {
   campaign: string
@@ -24,6 +31,10 @@ export interface AdMetric {
   cost: number
   impr: number
   date: string
+  ad_group?: string
+  conversions?: number
+  cost_per_conversion?: number
+  adgroup_target_cpa?: number
 }
 
 // Search term metrics - Core metrics from script

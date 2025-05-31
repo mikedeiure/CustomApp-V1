@@ -32,6 +32,55 @@ async function fetchTabData(sheetUrl: string, tab: SheetTab): Promise<AdMetric[]
   }
 }
 
+// New function specifically for Ad Group Analyzer data
+export async function fetchAdGroupData(sheetUrl: string): Promise<AdMetric[]> {
+  try {
+    const urlWithTab = `${sheetUrl}?tab=AdGroupDaily`
+    console.log('Fetching Ad Group data from:', urlWithTab)
+    
+    const response = await fetch(urlWithTab)
+    console.log('Response for AdGroupDaily:', {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Ad Group data: ${response.status} ${response.statusText}`)
+    }
+
+    const rawData = await response.json()
+    console.log('Raw Ad Group data:', Array.isArray(rawData) ? `Array with ${rawData.length} items` : rawData)
+
+    if (!Array.isArray(rawData)) {
+      throw new Error(`Expected array but got ${typeof rawData} for Ad Group data`)
+    }
+
+    // Map the ad group data to AdMetric format
+    // Google Ads script headers: ["ad_group", "campaign", "date", "cost", "conv", "cost_per_conv", "adgroup_target_cpa"]
+    const mappedData: AdMetric[] = rawData.map((item: any) => ({
+      campaign: item.campaign || '',
+      campaignId: item.campaign || '', // Use campaign name as ID for ad group data
+      clicks: 0, // Not available in ad group data
+      value: 0, // Not available in ad group data
+      conv: item.conv || 0,
+      conversions: item.conv || 0, // Map conv to conversions for consistency
+      cost: item.cost || 0,
+      cost_per_conversion: item.cost_per_conv || 0, // Map cost_per_conv to cost_per_conversion
+      impr: 0, // Not available in ad group data
+      date: item.date || '',
+      ad_group: item.ad_group || '',
+      adgroup_target_cpa: item.adgroup_target_cpa || 0 // Map adgroup_target_cpa
+    }))
+
+    console.log('Mapped Ad Group data:', mappedData.length, 'items')
+    return mappedData
+  } catch (error) {
+    console.error('Error fetching Ad Group data:', error)
+    throw error
+  }
+}
+
 export async function fetchAllTabsData(sheetUrl: string): Promise<TabData> {
   try {
     console.log('Fetching all tabs data from:', sheetUrl)

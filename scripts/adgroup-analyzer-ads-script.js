@@ -1,14 +1,14 @@
 const SHEET_URL = '';                     // add your sheet url here
 const AD_GROUP_TAB = 'AdGroupDaily';
 
-// Function to get date range for last 12 months
+// Function to get date range for last 180 days
 function getDateRange() {
   const today = new Date();
   const endDate = Utilities.formatDate(today, "GMT", "yyyy-MM-dd");
   
-  // Calculate 12 months ago
+  // Calculate 180 days ago
   const startDate = new Date(today);
-  startDate.setMonth(startDate.getMonth() - 12);
+  startDate.setDate(startDate.getDate() - 180);
   const formattedStartDate = Utilities.formatDate(startDate, "GMT", "yyyy-MM-dd");
   
   return {
@@ -17,7 +17,7 @@ function getDateRange() {
   };
 }
 
-// GAQL query for ad group daily data - dynamically uses last 12 months
+// GAQL query for ad group daily data - dynamically uses last 180 days
 function getAdGroupQuery() {
   const dateRange = getDateRange();
   
@@ -27,8 +27,6 @@ SELECT
   campaign.name,
   metrics.cost_micros,
   metrics.conversions,
-  metrics.impressions,
-  metrics.clicks,
   segments.date,
   campaign.bidding_strategy_type,
   campaign.target_cpa.target_cpa_micros,
@@ -46,7 +44,7 @@ function main() {
     
     // Log the date range being used
     const dateRange = getDateRange();
-    Logger.log(`📅 Analyzing data from ${dateRange.startDate} to ${dateRange.endDate} (last 12 months)`);
+    Logger.log(`📅 Analyzing data from ${dateRange.startDate} to ${dateRange.endDate} (last 180 days)`);
     
     // Access the Google Sheet
     let ss;
@@ -58,12 +56,12 @@ function main() {
       ss = SpreadsheetApp.openByUrl(SHEET_URL);
     }
 
-    // Process Ad Group tab - Simplified headers matching the pattern
+    // Process Ad Group tab - Simplified headers without impressions and clicks
     processTab(
       ss,
       AD_GROUP_TAB,
-      // Headers: simplified for easy consumption
-      ["ad_group", "campaign", "date", "cost", "conv", "cost_per_conv", "impr", "clicks", "adgroup_target_cpa"],
+      // Headers: simplified for easy consumption (removed impr and clicks)
+      ["ad_group", "campaign", "date", "cost", "conv", "cost_per_conv", "adgroup_target_cpa"],
       getAdGroupQuery(),
       processAdGroupData
     );
@@ -117,15 +115,13 @@ function processAdGroupData(rows) {
   while (rows.hasNext()) {
     const row = rows.next();
     
-    // Extract data according to the simplified headers
+    // Extract data according to the simplified headers (removed impressions and clicks)
     const adGroup = String(row['ad_group.name'] || '');
     const campaign = String(row['campaign.name'] || '');
     const date = String(row['segments.date'] || '');
     const costMicros = Number(row['metrics.cost_micros'] || 0);
     const cost = costMicros / 1000000;  // Convert micros to actual currency
     const conv = Number(row['metrics.conversions'] || 0);
-    const impr = Number(row['metrics.impressions'] || 0);
-    const clicks = Number(row['metrics.clicks'] || 0);
     
     // Calculate cost per conversion
     const costPerConv = conv > 0 ? cost / conv : 0;
@@ -134,8 +130,8 @@ function processAdGroupData(rows) {
     const adGroupTargetCpaMicros = row['ad_group.target_cpa_micros'];
     const adGroupTargetCpa = adGroupTargetCpaMicros ? Number(adGroupTargetCpaMicros) / 1000000 : 0;
 
-    // Create a new row matching the simplified headers
-    const newRow = [adGroup, campaign, date, cost, conv, costPerConv, impr, clicks, adGroupTargetCpa];
+    // Create a new row matching the simplified headers (removed impr and clicks)
+    const newRow = [adGroup, campaign, date, cost, conv, costPerConv, adGroupTargetCpa];
 
     // Push new row to the data array
     data.push(newRow);
@@ -148,7 +144,7 @@ function formatSheet(sheet, dataLength) {
     // Format currency columns (cost, cost_per_conv, adgroup target CPA)
     const costColumn = sheet.getRange(2, 4, dataLength - 1, 1);        // cost
     const costPerConvColumn = sheet.getRange(2, 6, dataLength - 1, 1); // cost_per_conv
-    const adGroupTargetCpaColumn = sheet.getRange(2, 9, dataLength - 1, 1);  // adgroup_target_cpa
+    const adGroupTargetCpaColumn = sheet.getRange(2, 7, dataLength - 1, 1);  // adgroup_target_cpa
     
     costColumn.setNumberFormat("$#,##0.00");
     costPerConvColumn.setNumberFormat("$#,##0.00");
@@ -156,14 +152,10 @@ function formatSheet(sheet, dataLength) {
     
     // Format number columns
     const convColumn = sheet.getRange(2, 5, dataLength - 1, 1);        // conv
-    const imprColumn = sheet.getRange(2, 7, dataLength - 1, 1);        // impr
-    const clicksColumn = sheet.getRange(2, 8, dataLength - 1, 1);      // clicks
     
     convColumn.setNumberFormat("#,##0.00");
-    imprColumn.setNumberFormat("#,##0");
-    clicksColumn.setNumberFormat("#,##0");
   }
   
   // Auto-resize columns
-  sheet.autoResizeColumns(1, 9);
+  sheet.autoResizeColumns(1, 7);
 } 

@@ -173,6 +173,33 @@ export function MetricsChart({
         .attr('stroke-width', 2)
         .attr('d', line1 as any) // Type assertion needed due to d3 typing limitations
 
+      // Add data points for metric1
+      svg.selectAll('.dot-metric1')
+        .data(data)
+        .enter().append('circle')
+        .attr('class', 'dot-metric1')
+        .attr('cx', d => (xScale as d3.ScaleTime<number, number>)(new Date(d.date)))
+        .attr('cy', d => y1Scale(d[metric1.key] as number))
+        .attr('r', 4)
+        .attr('fill', metric1.color)
+        .attr('stroke', 'white')
+        .attr('stroke-width', 2)
+
+      // Add permanent labels for metric1
+      svg.selectAll('.label-metric1')
+        .data(data)
+        .enter().append('text')
+        .attr('class', 'label-metric1')
+        .attr('x', d => (xScale as d3.ScaleTime<number, number>)(new Date(d.date)))
+        .attr('y', d => y1Scale(d[metric1.key] as number) - 10)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '10px')
+        .attr('font-weight', 'bold')
+        .attr('fill', metric1.color)
+        .attr('stroke', 'white')
+        .attr('stroke-width', 0.5)
+        .text(d => metric1.format(d[metric1.key] as number))
+
       if (metric2 && y2Scale) {
         const line2 = d3.line<ChartData>()
           .x(d => (xScale as d3.ScaleTime<number, number>)(new Date(d.date)))
@@ -184,6 +211,33 @@ export function MetricsChart({
           .attr('stroke', metric2.color)
           .attr('stroke-width', 2)
           .attr('d', line2 as any) // Type assertion needed due to d3 typing limitations
+
+        // Add data points for metric2
+        svg.selectAll('.dot-metric2')
+          .data(data)
+          .enter().append('circle')
+          .attr('class', 'dot-metric2')
+          .attr('cx', d => (xScale as d3.ScaleTime<number, number>)(new Date(d.date)))
+          .attr('cy', d => y2Scale(d[metric2.key] as number))
+          .attr('r', 4)
+          .attr('fill', metric2.color)
+          .attr('stroke', 'white')
+          .attr('stroke-width', 2)
+
+        // Add permanent labels for metric2
+        svg.selectAll('.label-metric2')
+          .data(data)
+          .enter().append('text')
+          .attr('class', 'label-metric2')
+          .attr('x', d => (xScale as d3.ScaleTime<number, number>)(new Date(d.date)))
+          .attr('y', d => y2Scale(d[metric2.key] as number) + 20)
+          .attr('text-anchor', 'middle')
+          .attr('font-size', '10px')
+          .attr('font-weight', 'bold')
+          .attr('fill', metric2.color)
+          .attr('stroke', 'white')
+          .attr('stroke-width', 0.5)
+          .text(d => metric2.format(d[metric2.key] as number))
       }
     } else {
       // Add bars
