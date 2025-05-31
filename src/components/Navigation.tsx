@@ -36,6 +36,15 @@ export function Navigation() {
                         >
                             Search Terms
                         </Link>
+                        <Link
+                            href="/ad-group-analyzer"
+                            className={cn(
+                                "text-sm font-medium transition-colors hover:text-foreground/80",
+                                pathname === "/ad-group-analyzer" ? "text-foreground" : "text-foreground/60"
+                            )}
+                        >
+                            Ad Group Analyzer
+                        </Link>
                     </div>
                     <Link
                         href="/settings"
