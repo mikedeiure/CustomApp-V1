@@ -33,6 +33,22 @@ interface CustomDateRange {
     endDate: string
 }
 
+interface FilterState {
+    selectedCampaign: string
+    dateRangeOption: DateRangeOption
+    customDateRange: CustomDateRange
+    sortOption: 'cost' | 'alphabetical-desc' | 'alphabetical-asc'
+}
+
+const FILTER_STORAGE_KEY = 'adGroupAnalyzerFilters'
+
+const defaultFilterState: FilterState = {
+    selectedCampaign: '',
+    dateRangeOption: 'last30',
+    customDateRange: { startDate: '', endDate: '' },
+    sortOption: 'cost'
+}
+
 const dateRangeOptions = [
     { value: 'all', label: 'All Time' },
     { value: 'last7', label: 'Last 7 Days' },
@@ -83,10 +99,43 @@ function AdGroupAnalyzerContent() {
     const [error, setError] = useState<string>()
     
     const [selectedMetrics, setSelectedMetrics] = useState<[DisplayMetric, DisplayMetric]>(['cost', 'cost_per_conversion'])
-    const [selectedCampaign, setSelectedCampaign] = useState<string>('')
-    const [dateRangeOption, setDateRangeOption] = useState<DateRangeOption>('last30')
-    const [customDateRange, setCustomDateRange] = useState<CustomDateRange>({ startDate: '', endDate: '' })
-    const [sortOption, setSortOption] = useState<'cost' | 'alphabetical-desc' | 'alphabetical-asc'>('cost')
+    const [filterState, setFilterState] = useState<FilterState>(defaultFilterState)
+    const [isFilterInitialized, setIsFilterInitialized] = useState(false)
+
+    // Load filter state from localStorage on mount
+    useEffect(() => {
+        try {
+            const savedFilters = localStorage.getItem(FILTER_STORAGE_KEY)
+            if (savedFilters) {
+                const parsedFilters = JSON.parse(savedFilters)
+                console.log('AdGroupAnalyzer: Loaded filter state from localStorage:', parsedFilters)
+                setFilterState(prev => ({ ...prev, ...parsedFilters }))
+            }
+        } catch (error) {
+            console.error('Error loading Ad Group Analyzer filter state from localStorage:', error)
+        } finally {
+            setIsFilterInitialized(true)
+        }
+    }, [])
+
+    // Save filter state to localStorage whenever it changes (debounced)
+    useEffect(() => {
+        if (isFilterInitialized) {
+            const timeoutId = setTimeout(() => {
+                try {
+                    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filterState))
+                    console.log('AdGroupAnalyzer: Saved filter state to localStorage:', filterState)
+                } catch (error) {
+                    console.error('Error saving Ad Group Analyzer filter state to localStorage:', error)
+                }
+            }, 100) // Debounce by 100ms
+
+            return () => clearTimeout(timeoutId)
+        }
+    }, [filterState, isFilterInitialized])
+
+    // Destructure filter state for easier access
+    const { selectedCampaign, dateRangeOption, customDateRange, sortOption } = filterState
 
     // Use ad group analyzer data
     const activeData = agFetchedData?.daily || []
@@ -98,6 +147,17 @@ function AdGroupAnalyzerContent() {
         if (!activeData || activeData.length === 0) return []
         return getCampaignsFromAdGroupData(activeData)
     }, [activeData])
+
+    // Validate selected campaign still exists in current data
+    useEffect(() => {
+        if (isFilterInitialized && selectedCampaign && adGroupCampaigns.length > 0) {
+            const campaignExists = adGroupCampaigns.some(c => c.id === selectedCampaign)
+            if (!campaignExists) {
+                console.log('AdGroupAnalyzer: Selected campaign no longer exists, clearing selection')
+                setFilterState(prev => ({ ...prev, selectedCampaign: '' }))
+            }
+        }
+    }, [adGroupCampaigns, isFilterInitialized])
 
     // Get the date range for the most recent data
     const getDataDateRange = (): { minDate: string, maxDate: string } => {
@@ -166,13 +226,16 @@ function AdGroupAnalyzerContent() {
     }
 
     // Get data for selected campaign and/or date range
-    const getFilteredData = (): AdMetric[] => {
+    const getFilteredData = useMemo((): AdMetric[] => {
         if (!activeData) return []
         
         let filtered = activeData
 
         // Filter by date range
-        filtered = filtered.filter((d: AdMetric) => isDateInRange(d.date))
+        const { startDate, endDate } = getActiveDateRange()
+        if (startDate && endDate) {
+            filtered = filtered.filter((d: AdMetric) => d.date >= startDate && d.date <= endDate)
+        }
 
         // Filter by campaign if selected
         if (selectedCampaign) {
@@ -180,21 +243,13 @@ function AdGroupAnalyzerContent() {
         }
         
         return filtered
-    }
+    }, [activeData, dateRangeOption, customDateRange, selectedCampaign])
 
     // Group data by ad group for display
-    const getAdGroupsWithData = () => {
+    const getAdGroupsWithData = useMemo(() => {
         if (!activeData) return []
         
-        let dataToGroup = activeData
-
-        // Filter by date range
-        dataToGroup = dataToGroup.filter((d: AdMetric) => isDateInRange(d.date))
-
-        // Filter by campaign if selected
-        if (selectedCampaign) {
-            dataToGroup = dataToGroup.filter((d: AdMetric) => d.campaign === selectedCampaign)
-        }
+        let dataToGroup = getFilteredData
         
         const adGroupsMap = new Map<string, { 
             adGroup: string, 
@@ -241,21 +296,27 @@ function AdGroupAnalyzerContent() {
         } else {
             return adGroupsArray.sort((a, b) => a.adGroup.localeCompare(b.adGroup)) // Alphabetical ascending (A to Z)
         }
-    }
+    }, [getFilteredData, sortOption])
 
-    const dailyMetrics = calculateDailyMetrics(getFilteredData())
-    const adGroupsWithData = getAdGroupsWithData()
-    const { minDate, maxDate } = getDataDateRange()
+    const dailyMetrics = useMemo(() => calculateDailyMetrics(getFilteredData), [getFilteredData])
+    const adGroupsWithData = getAdGroupsWithData
+    const { minDate, maxDate } = useMemo(() => getDataDateRange(), [activeData])
 
     const handleMetricClick = (metric: DisplayMetric) => {
         setSelectedMetrics(prev => [prev[1], metric])
     }
 
     const handleDateRangeChange = (option: DateRangeOption) => {
-        setDateRangeOption(option)
+        setFilterState(prev => ({ ...prev, dateRangeOption: option }))
         if (option !== 'custom') {
-            setCustomDateRange({ startDate: '', endDate: '' })
+            setFilterState(prev => ({ ...prev, customDateRange: { startDate: '', endDate: '' } }))
         }
+    }
+
+    // Reset all filters to default state
+    const handleResetFilters = () => {
+        console.log('AdGroupAnalyzer: Resetting filters to default state')
+        setFilterState(defaultFilterState)
     }
 
     // Format date range for display
@@ -272,7 +333,7 @@ function AdGroupAnalyzerContent() {
 
     const handleUpdate = async () => {
         if (!agSettings.sheetUrl.trim()) {
-            setError('Please enter a Google Sheet URL')
+            setError('Please enter a Google Apps Script URL')
             return
         }
 
@@ -314,19 +375,19 @@ function AdGroupAnalyzerContent() {
                         <div className="space-y-6">
                             <div>
                                 <Label htmlFor="adGroupSheetUrl" className="text-base">
-                                    Google Sheet URL for Ad Group Data
+                                    Google Apps Script URL for Ad Group Data
                                 </Label>
                                 <div className="mt-2">
                                     <Input
                                         id="adGroupSheetUrl"
                                         value={agSettings.sheetUrl}
                                         onChange={(e) => setSheetUrl(e.target.value)}
-                                        placeholder="Enter your Google Sheet URL for ad group analysis"
+                                        placeholder="Enter your Google Apps Script URL for ad group analysis"
                                         className="h-12"
                                     />
                                 </div>
                                 <p className="text-sm text-gray-500 mt-1">
-                                    This should be a different Google Sheet URL than your main campaign data.
+                                    This should be the Google Apps Script URL that returns ad group data.
                                 </p>
                             </div>
 
@@ -386,7 +447,7 @@ function AdGroupAnalyzerContent() {
                     <Card className="p-8 bg-white shadow-sm">
                         <div className="text-center text-gray-500">
                             <h2 className="text-xl font-medium mb-4">Configure Ad Group Analyzer</h2>
-                            <p className="mb-4">Click the settings wheel above to configure your Google Sheet URL for ad group analysis.</p>
+                            <p className="mb-4">Click the settings wheel above to configure your Google Apps Script URL for ad group analysis.</p>
                             <Button 
                                 onClick={() => setShowSettings(true)}
                                 variant="outline"
@@ -401,7 +462,7 @@ function AdGroupAnalyzerContent() {
                     <Card className="p-8 bg-white shadow-sm">
                         <div className="text-center text-gray-500">
                             <h2 className="text-xl font-medium mb-4">Loading Ad Group Data...</h2>
-                            <p>Fetching data from your Google Sheet...</p>
+                            <p>Fetching data from your Google Apps Script...</p>
                         </div>
                     </Card>
                 ) : activeError ? (
@@ -423,6 +484,12 @@ function AdGroupAnalyzerContent() {
                         <div className="text-center text-gray-500">
                             <h2 className="text-xl font-medium mb-4">No Ad Group Data Found</h2>
                             <p>No ad group data available for the selected filters.</p>
+                            <Button 
+                                onClick={handleResetFilters}
+                                variant="outline"
+                            >
+                                Reset Filters
+                            </Button>
                         </div>
                     </Card>
                 ) : (
@@ -438,7 +505,7 @@ function AdGroupAnalyzerContent() {
                                 <CampaignSelect
                                     campaigns={adGroupCampaigns}
                                     selectedId={selectedCampaign}
-                                    onSelect={setSelectedCampaign}
+                                    onSelect={(id) => setFilterState(prev => ({ ...prev, selectedCampaign: id }))}
                                 />
                             </div>
                             <div>
@@ -467,7 +534,7 @@ function AdGroupAnalyzerContent() {
                                 <select
                                     id="sort-filter-overview"
                                     value={sortOption}
-                                    onChange={(e) => setSortOption(e.target.value as 'cost' | 'alphabetical-desc' | 'alphabetical-asc')}
+                                    onChange={(e) => setFilterState(prev => ({ ...prev, sortOption: e.target.value as 'cost' | 'alphabetical-desc' | 'alphabetical-asc' }))}
                                     className="block w-full px-4 py-3 text-base rounded-lg border border-gray-200 bg-white shadow-sm 
                                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
                                       hover:border-gray-300 transition-colors"
@@ -478,6 +545,19 @@ function AdGroupAnalyzerContent() {
                                 </select>
                             </div>
                         </div>
+
+                        {/* Reset Filters Button */}
+                        {(selectedCampaign || dateRangeOption !== 'last30' || sortOption !== 'cost') && (
+                            <div className="flex justify-end">
+                                <Button 
+                                    onClick={handleResetFilters}
+                                    variant="outline"
+                                    className="text-sm"
+                                >
+                                    Reset All Filters
+                                </Button>
+                            </div>
+                        )}
 
                         {dateRangeOption === 'custom' && (
                             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -492,7 +572,7 @@ function AdGroupAnalyzerContent() {
                                             value={customDateRange.startDate}
                                             min={minDate}
                                             max={maxDate}
-                                            onChange={(e) => setCustomDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+                                            onChange={(e) => setFilterState(prev => ({ ...prev, customDateRange: { ...prev.customDateRange, startDate: e.target.value } }))}
                                             className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
                                               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         />
@@ -507,7 +587,7 @@ function AdGroupAnalyzerContent() {
                                             value={customDateRange.endDate}
                                             min={customDateRange.startDate || minDate}
                                             max={maxDate}
-                                            onChange={(e) => setCustomDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+                                            onChange={(e) => setFilterState(prev => ({ ...prev, customDateRange: { ...prev.customDateRange, endDate: e.target.value } }))}
                                             className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
                                               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         />
