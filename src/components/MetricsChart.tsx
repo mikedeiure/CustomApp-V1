@@ -105,6 +105,47 @@ export function MetricsChart({
         .nice()
     }
 
+    // Create gradient definitions for area fills
+    const defs = svg.append('defs')
+
+    // Gradient for metric1 (blue)
+    const gradient1 = defs.append('linearGradient')
+      .attr('id', 'gradient1')
+      .attr('x1', '0%')
+      .attr('y1', '0%')
+      .attr('x2', '0%')
+      .attr('y2', '100%')
+
+    gradient1.append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', metric1.color)
+      .attr('stop-opacity', 0.6)
+
+    gradient1.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', metric1.color)
+      .attr('stop-opacity', 0.05)
+
+    // Gradient for metric2 (orange/red)
+    if (metric2) {
+      const gradient2 = defs.append('linearGradient')
+        .attr('id', 'gradient2')
+        .attr('x1', '0%')
+        .attr('y1', '0%')
+        .attr('x2', '0%')
+        .attr('y2', '100%')
+
+      gradient2.append('stop')
+        .attr('offset', '0%')
+        .attr('stop-color', metric2.color)
+        .attr('stop-opacity', 0.6)
+
+      gradient2.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', metric2.color)
+        .attr('stop-opacity', 0.05)
+    }
+
     // Helper function to format y-axis ticks
     const formatYAxisTick = (d: number, key: string) => {
       // Check if the metric is cost or value (currency)
@@ -161,10 +202,24 @@ export function MetricsChart({
     }
 
     if (currentChartType === 'line') {
+      // Create area generators for gradient fills
+      const area1 = d3.area<ChartData>()
+        .x(d => (xScale as d3.ScaleTime<number, number>)(new Date(d.date)))
+        .y0(height)
+        .y1(d => y1Scale(d[metric1.key] as number))
+        .curve(d3.curveMonotoneX)
+
+      // Add gradient area for metric1
+      svg.append('path')
+        .datum(data)
+        .attr('fill', 'url(#gradient1)')
+        .attr('d', area1 as any)
+
       // Add lines
       const line1 = d3.line<ChartData>()
         .x(d => (xScale as d3.ScaleTime<number, number>)(new Date(d.date)))
         .y(d => y1Scale(d[metric1.key] as number))
+        .curve(d3.curveMonotoneX)
 
       svg.append('path')
         .datum(data)
@@ -201,9 +256,23 @@ export function MetricsChart({
         .text(d => metric1.format(d[metric1.key] as number))
 
       if (metric2 && y2Scale) {
+        // Create area generator for metric2
+        const area2 = d3.area<ChartData>()
+          .x(d => (xScale as d3.ScaleTime<number, number>)(new Date(d.date)))
+          .y0(height)
+          .y1(d => y2Scale(d[metric2.key] as number))
+          .curve(d3.curveMonotoneX)
+
+        // Add gradient area for metric2
+        svg.append('path')
+          .datum(data)
+          .attr('fill', 'url(#gradient2)')
+          .attr('d', area2 as any)
+
         const line2 = d3.line<ChartData>()
           .x(d => (xScale as d3.ScaleTime<number, number>)(new Date(d.date)))
           .y(d => y2Scale(d[metric2.key] as number))
+          .curve(d3.curveMonotoneX)
 
         svg.append('path')
           .datum(data)
